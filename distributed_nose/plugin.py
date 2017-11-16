@@ -1,4 +1,5 @@
 
+import json
 import logging
 
 from hash_ring import HashRing
@@ -8,12 +9,20 @@ from nose.util import test_address
 
 logger = logging.getLogger('nose.plugins.distributed_nose')
 
+
 class DistributedNose(Plugin):
     """
     Distribute a test run, shared-nothing style, by specifying the total number
     of runners and a unique ID for this runner.
     """
     name = 'distributed'
+
+    ALGORITHM_HASH_RING = 0
+    ALGORITHM_LEAST_PROCESSING_TIME = 1
+    algorithms = {
+        "hash-ring": ALGORITHM_HASH_RING,
+        "least-processing-time": ALGORITHM_LEAST_PROCESSING_TIME
+    }
 
     def __init__(self):
         Plugin.__init__(self)
@@ -69,11 +78,41 @@ class DistributedNose(Plugin):
                 "set this flag to keep tests in the same class on the same node. "
             )),
         )
+        parser.add_option(
+            "--algorithm",
+            action="store",
+            dest="algorithm",
+            choices=(
+                "hash-ring",
+                "least-processing-time"
+            ),
+            default="hash-ring",
+            metavar="ALGORITHM",
+            help=(
+                "Specify an algorithm [hash-ring|least-processing-time] "
+                "to use to distribute the tests. By default, tests are "
+                "distributed using a hash ring. If least-processing-time "
+                "is specified, you must also provide a filepath for the "
+                "duration data with the --lpt-data option."
+            ),
+        )
+        parser.add_option(
+            "--lpt-data",
+            action="store",
+            dest="lpt_data_filepath",
+            help=(
+                "The filepath from which to retrieve the data to use for "
+                "the least processing time algorithm. Required when "
+                "using '--algorithm=least-processing-time'."
+            ),
+        )
 
     def configure(self, options, config):
         self.node_count = options.distributed_nodes
         self.node_id = options.distributed_node_number
         self.hash_by_class = options.distributed_hash_by_class
+        self.algorithm = self.algorithms[options.algorithm]
+        self.lpt_data_filepath = options.lpt_data_filepath
 
         if not self._options_are_valid():
             self.enabled = False
@@ -87,6 +126,73 @@ class DistributedNose(Plugin):
             # If the user gives us a non-1 count of distributed nodes, then
             # let's distribute their tests
             self.enabled = True
+
+        if self.algorithm == self.ALGORITHM_LEAST_PROCESSING_TIME:
+            if not self.lpt_data_filepath:
+                logger.critical((
+                    "'--algorithm least-processing-time' requires "
+                    "'--lpt-data <lpt-data-filepath>' to be specified as "
+                    "well. Falling back to hash-ring algorithm."
+                ))
+                self.algorithm = self.ALGORITHM_HASH_RING
+            else:
+                # Set up the data structure for the nodes. Note that
+                # the 0th node is a dummy node. We do this since the nodes
+                # are 1-indexed and this prevents the need to do
+                # offsetting when we access this structure with
+                # a node-number elsewhere.
+                self.lpt_nodes = [
+                    {
+                        'processing_time': 0,
+                        'classes': set()
+                    }
+                    for _ in range(self.node_count + 1)
+                ]
+                try:
+                    with open(self.lpt_data_filepath) as f:
+                        self.lpt_data = json.load(f)
+
+                        # for now, lpt only operates at the class level
+                        self.hash_by_class = True
+
+                        sorted_lpt_data = sorted(
+                            self.lpt_data.items(),
+                            key=lambda t: t[1]['duration'],
+                            reverse=True
+                        )
+
+                        for cls, data in sorted_lpt_data:
+                            node = min(
+                                self.lpt_nodes[1:],
+                                key=lambda n: n['processing_time']
+                            )
+                            node['processing_time'] += data['duration']
+                            node['classes'].add(cls)
+
+                except IOError:
+                    logger.critical(
+                        (
+                            "lpt-data file '%s' not found. "
+                            "Falling back to hash-ring algorithm."
+                        ),
+                        self.lpt_data_filepath
+                    )
+                    self.algorithm = self.ALGORITHM_HASH_RING
+                except ValueError as e:
+                    logger.critical(
+                        "%s. Falling back to hash-ring algorithm.",
+                        e
+                    )
+                    self.algorithm = self.ALGORITHM_HASH_RING
+                except KeyError as e:
+                    logger.critical(
+                        (
+                            "%s. Invalid lpt data file. "
+                            "Falling back to hash-ring algorithm."
+                        ),
+                        e
+                    )
+                    self.algorithm = self.ALGORITHM_HASH_RING
 
         self.hash_ring = HashRing(range(1, self.node_count + 1))
 
@@ -136,9 +242,27 @@ class DistributedNose(Plugin):
             # Defer to wantMethod.
             return None
 
-        node = self.hash_ring.get_node(str(cls))
-        if node != self.node_id:
-            return False
+        if self.algorithm == self.ALGORITHM_HASH_RING:
+            node = self.hash_ring.get_node(str(cls))
+            if node != self.node_id:
+                return False
+        elif self.algorithm == self.ALGORITHM_LEAST_PROCESSING_TIME:
+            namespaced_class = '{}.{}'.format(
+                cls.__module__,
+                cls.__name__
+            )
+            if namespaced_class in self.lpt_data:
+                return namespaced_class in self.lpt_nodes[self.node_id]['classes']
+            else:
+                # When we don't have duration data for this class,
+                # use the hash ring to get a node. This seems safer
+                # than trying to dynamically update the distribution
+                # using LPT, since it is guaranteed to be deterministic
+                # across nodes (whereas dynamic LPT would be deterministic
+                # only if we were given the classes for consideration in
+                # the same order across all nodes).
+                node = self.hash_ring.get_node(str(cls))
+                return node == self.node_id
 
         return None
 

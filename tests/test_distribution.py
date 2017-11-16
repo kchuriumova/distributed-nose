@@ -1,5 +1,6 @@
 
 import inspect
+import os
 import unittest
 from optparse import OptionParser
 
@@ -62,7 +63,13 @@ class TestTestSelection(unittest.TestCase):
         self.assertFalse(all_allowed)
 
 
-class TestClassDistribution(PluginTester, unittest.TestCase):
+class TestDistributionBase(unittest.TestCase):
+    def _tests_run(self):
+        test_lines = str(self.output).split('\n\n')[0].split('\n')
+        return [line.split(' ... ')[0] for line in test_lines]
+
+
+class TestClassDistribution(PluginTester, TestDistributionBase):
     plugins = [DistributedNose()]
     suitepath = 'tests.dummy_tests'
     activate = '--nodes=3'
@@ -70,10 +77,6 @@ class TestClassDistribution(PluginTester, unittest.TestCase):
         '--node-number=1',
         '-v'  # get test names into output
     ]
-
-    def _tests_run(self):
-        test_lines = str(self.output).split('\n\n')[0].split('\n')
-        return [line.split(' ... ')[0] for line in test_lines]
 
 
 class TestClassDistributionOff(TestClassDistribution):
@@ -113,3 +116,110 @@ class TestClassDistributionOn(TestClassDistribution):
 
     def test_func2_included(self):
         self.assertTrue('tests.dummy_tests.test_func2' in self._tests_run())
+
+
+class TestLptDistribution(PluginTester, TestDistributionBase):
+    plugins = [DistributedNose()]
+    suitepath = 'tests.dummy_tests'
+    activate = '--nodes=3'
+    args = [
+        '--algorithm=least-processing-time',
+        '-v'  # get test names into output
+    ]
+    lpt_all_filepath = os.path.join(
+        os.path.dirname(__file__),
+        'lpt_data',
+        'lpt_all.json'
+    )
+    lpt_partial_filepath = os.path.join(
+        os.path.dirname(__file__),
+        'lpt_data',
+        'lpt_partial.json'
+    )
+
+
+class TestLptDistributionAllNodeOne(TestLptDistribution):
+    args = TestLptDistribution.args + [
+        '--node-number=1',
+        '--lpt-data={}'.format(TestLptDistribution.lpt_all_filepath)
+    ]
+
+    def test_only_largest_included(self):
+        # The dummy duration data in 'lpt_all.json' is designed
+        # such that the first two nodes (of three) should get
+        # exactly one class each. The first node should get the
+        # longest duration class, which is TC5.
+
+        self.assertEqual(
+            self.plugins[0].algorithm,
+            DistributedNose.ALGORITHM_LEAST_PROCESSING_TIME
+        )
+
+        classes = set(
+            name.split('.')[-1][:-1]
+            for name in self._tests_run()
+            if '.TC' in name
+        )
+
+        self.assertTrue(len(classes) == 1)
+        self.assertIn('TC5', classes)
+
+    # Function selection should not have changed.
+    def test_func1_excluded(self):
+        self.assertTrue('tests.dummy_tests.test_func1' not in self._tests_run())
+
+    def test_func2_included(self):
+        self.assertTrue('tests.dummy_tests.test_func2' in self._tests_run())
+
+
+class TestLptDistributionAllNodeThree(TestLptDistribution):
+    args = TestLptDistribution.args + [
+        '--node-number=3',
+        '--lpt-data={}'.format(TestLptDistribution.lpt_all_filepath)
+    ]
+
+    def test_all_smallest_included(self):
+        # The dummy duration data in 'lpt_all.json' is designed
+        # such that the third node (of three) should get all the
+        # short duration tests, namely TC1, TC2, TC4, and TC6.
+
+        self.assertEqual(
+            self.plugins[0].algorithm,
+            DistributedNose.ALGORITHM_LEAST_PROCESSING_TIME
+        )
+
+        classes = set(
+            name.split('.')[-1][:-1]
+            for name in self._tests_run()
+            if '.TC' in name
+        )
+
+        self.assertTrue(
+            all(
+                map(
+                    lambda c: c in classes,
+                    ['TC1', 'TC2', 'TC4', 'TC6']
+                )
+            )
+        )
+
+
+class TestLptDistributionPartial(TestLptDistribution):
+    # Tests the case where a class is missing from the lpt data file.
+
+    args = TestLptDistribution.args + [
+        '--node-number=1',
+        '--lpt-data={}'.format(TestLptDistribution.lpt_partial_filepath)
+    ]
+
+    def test_tc3_is_included(self):
+        # The dummy duration data in 'lpt_partial.json' omits TC3,
+        # so it should hash to node 1 as in the class distribution tests.
+        self.assertEqual(
+            self.plugins[0].algorithm,
+            DistributedNose.ALGORITHM_LEAST_PROCESSING_TIME
+        )
+
+        testnames = self._tests_run()
+        from_tc3 = [name for name in testnames if '.TC3)' in name]
+        self.assertTrue(len(from_tc3) == 4)
