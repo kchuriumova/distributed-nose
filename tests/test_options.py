@@ -113,7 +113,7 @@ class TestOptionValidation(unittest.TestCase):
         )
         self.assertTrue(self.plugin.enabled)
 
-    def test_lpt_no_data_arg_falls_back(self):
+    def test_lpt_no_data_arg_aborts(self):
         env = {'NOSE_NODES': 6,
                'NOSE_NODE_NUMBER': 4}
         self.plugin.options(self.parser, env=env)
@@ -121,15 +121,11 @@ class TestOptionValidation(unittest.TestCase):
             '--algorithm=least-processing-time'
         ]
         options, _ = self.parser.parse_args(args)
-        self.plugin.configure(options, Config())
 
-        self.assertEqual(
-            self.plugin.algorithm,
-            DistributedNose.ALGORITHM_HASH_RING
-        )
-        self.assertTrue(self.plugin.enabled)
+        with self.assertRaises(AssertionError):
+            self.plugin.configure(options, Config())
 
-    def test_lpt_missing_data_file_falls_back(self):
+    def test_lpt_missing_data_file_aborts(self):
         LPT_DATA_FILEPATH = os.path.join(
             os.path.dirname(__file__),
             'no_such_file.json'
@@ -142,15 +138,11 @@ class TestOptionValidation(unittest.TestCase):
             '--lpt-data={}'.format(LPT_DATA_FILEPATH)
         ]
         options, _ = self.parser.parse_args(args)
-        self.plugin.configure(options, Config())
 
-        self.assertEqual(
-            self.plugin.algorithm,
-            DistributedNose.ALGORITHM_HASH_RING
-        )
-        self.assertTrue(self.plugin.enabled)
+        with self.assertRaises(IOError):
+            self.plugin.configure(options, Config())
 
-    def test_lpt_invalid_json_file_falls_back(self):
+    def test_lpt_invalid_json_file_aborts(self):
         LPT_DATA_FILEPATH = os.path.join(
             os.path.dirname(__file__),
             'lpt_data',
@@ -164,15 +156,11 @@ class TestOptionValidation(unittest.TestCase):
             '--lpt-data={}'.format(LPT_DATA_FILEPATH)
         ]
         options, _ = self.parser.parse_args(args)
-        self.plugin.configure(options, Config())
 
-        self.assertEqual(
-            self.plugin.algorithm,
-            DistributedNose.ALGORITHM_HASH_RING
-        )
-        self.assertTrue(self.plugin.enabled)
+        with self.assertRaises(ValueError):
+            self.plugin.configure(options, Config())
 
-    def test_lpt_invalid_data_format_falls_back(self):
+    def test_lpt_invalid_data_format_aborts(self):
         LPT_DATA_FILEPATH = os.path.join(
             os.path.dirname(__file__),
             'lpt_data',
@@ -186,10 +174,6 @@ class TestOptionValidation(unittest.TestCase):
             '--lpt-data={}'.format(LPT_DATA_FILEPATH)
         ]
         options, _ = self.parser.parse_args(args)
-        self.plugin.configure(options, Config())
 
-        self.assertEqual(
-            self.plugin.algorithm,
-            DistributedNose.ALGORITHM_HASH_RING
-        )
-        self.assertTrue(self.plugin.enabled)
+        with self.assertRaises(KeyError):
+            self.plugin.configure(options, Config())

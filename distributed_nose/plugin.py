@@ -128,14 +128,9 @@ class DistributedNose(Plugin):
             self.enabled = True
 
         if self.algorithm == self.ALGORITHM_LEAST_PROCESSING_TIME:
-            if not self.lpt_data_filepath:
-                logger.critical((
-                    "'--algorithm least-processing-time' requires "
-                    "'--lpt-data <lpt-data-filepath>' to be specified as "
-                    "well. Falling back to hash-ring algorithm."
-                ))
-                self.algorithm = self.ALGORITHM_HASH_RING
-            else:
+            assert self.lpt_data_filepath, "'--lpt-data' arg is set."
+
+            try:
                 # Set up the data structure for the nodes. Note that
                 # the 0th node is a dummy node. We do this since the nodes
                 # are 1-indexed and this prevents the need to do
@@ -148,51 +143,43 @@ class DistributedNose(Plugin):
                     }
                     for _ in range(self.node_count + 1)
                 ]
-                try:
-                    with open(self.lpt_data_filepath) as f:
-                        self.lpt_data = json.load(f)
 
-                        # for now, lpt only operates at the class level
-                        self.hash_by_class = True
+                with open(self.lpt_data_filepath) as f:
+                    self.lpt_data = json.load(f)
 
-                        sorted_lpt_data = sorted(
-                            self.lpt_data.items(),
-                            key=lambda t: t[1]['duration'],
-                            reverse=True
+                    # for now, lpt only operates at the class level
+                    self.hash_by_class = True
+
+                    sorted_lpt_data = sorted(
+                        self.lpt_data.items(),
+                        key=lambda t: t[1]['duration'],
+                        reverse=True
+                    )
+
+                    for cls, data in sorted_lpt_data:
+                        node = min(
+                            self.lpt_nodes[1:],
+                            key=lambda n: n['processing_time']
                         )
+                        node['processing_time'] += data['duration']
+                        node['classes'].add(cls)
 
-                        for cls, data in sorted_lpt_data:
-                            node = min(
-                                self.lpt_nodes[1:],
-                                key=lambda n: n['processing_time']
-                            )
-                            node['processing_time'] += data['duration']
-                            node['classes'].add(cls)
-
-                except IOError:
-                    logger.critical(
-                        (
-                            "lpt-data file '%s' not found. "
-                            "Falling back to hash-ring algorithm."
-                        ),
-                        self.lpt_data_filepath
-                    )
-                    self.algorithm = self.ALGORITHM_HASH_RING
-                except ValueError as e:
-                    logger.critical(
-                        "%s. Falling back to hash-ring algorithm.",
-                        e
-                    )
-                    self.algorithm = self.ALGORITHM_HASH_RING
-                except KeyError as e:
-                    logger.critical(
-                        (
-                            "%s. Invalid lpt data file. "
-                            "Falling back to hash-ring algorithm."
-                        ),
-                        e
-                    )
-                    self.algorithm = self.ALGORITHM_HASH_RING
+            except IOError:
+                logger.critical(
+                    "lpt-data file '%s' not found. Aborting.",
+                    self.lpt_data_filepath
+                )
+                raise
+            except ValueError:
+                logger.critical(
+                    "Error decoding lpt-data file. Aborting."
+                )
+                raise
+            except KeyError:
+                logger.critical(
+                    "Invalid lpt data file. Aborting."
+                )
+                raise
 
         self.hash_ring = HashRing(range(1, self.node_count + 1))
 
