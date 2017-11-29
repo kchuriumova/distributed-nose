@@ -122,6 +122,7 @@ class TestOptionValidation(unittest.TestCase):
         ]
         options, _ = self.parser.parse_args(args)
 
+        # TODO: make compatible with python 2.6 ?
         with self.assertRaises(AssertionError):
             self.plugin.configure(options, Config())
 
@@ -139,6 +140,7 @@ class TestOptionValidation(unittest.TestCase):
         ]
         options, _ = self.parser.parse_args(args)
 
+        # TODO: make compatible with python 2.6 ?
         with self.assertRaises(IOError):
             self.plugin.configure(options, Config())
 
@@ -157,6 +159,7 @@ class TestOptionValidation(unittest.TestCase):
         ]
         options, _ = self.parser.parse_args(args)
 
+        # TODO: make compatible with python 2.6 ?
         with self.assertRaises(ValueError):
             self.plugin.configure(options, Config())
 
@@ -175,5 +178,6 @@ class TestOptionValidation(unittest.TestCase):
         ]
         options, _ = self.parser.parse_args(args)
 
+        # TODO: make compatible with python 2.6 ?
         with self.assertRaises(KeyError):
             self.plugin.configure(options, Config())

@@ -162,6 +162,7 @@ class TestLptDistributionAllNodeOne(TestLptDistribution):
         )
 
         self.assertTrue(len(classes) == 1)
+        # TODO: make compatible with python 2.6 ?
         self.assertIn('TC5', classes)
 
     # Function selection should not have changed.

@@ -86,7 +86,7 @@ class DistributedNose(Plugin):
                 "hash-ring",
                 "least-processing-time"
             ),
-            default="hash-ring",
+            default=env.get('NOSE_DISTRIBUTION_ALGORITHM', "hash-ring"),
             metavar="ALGORITHM",
             help=(
                 "Specify an algorithm [hash-ring|least-processing-time] "
@@ -100,6 +100,7 @@ class DistributedNose(Plugin):
             "--lpt-data",
             action="store",
             dest="lpt_data_filepath",
+            default=env.get('NOSE_LPT_DATA_FILEPATH'),
             help=(
                 "The filepath from which to retrieve the data to use for "
                 "the least processing time algorithm. Required when "
@@ -156,13 +157,13 @@ class DistributedNose(Plugin):
                         reverse=True
                     )
 
-                    for cls, data in sorted_lpt_data:
+                    for c, data in sorted_lpt_data:
                         node = min(
                             self.lpt_nodes[1:],
                             key=lambda n: n['processing_time']
                         )
                         node['processing_time'] += data['duration']
-                        node['classes'].add(cls)
+                        node['classes'].add(c)
 
             except IOError:
                 logger.critical(
@@ -249,7 +250,8 @@ class DistributedNose(Plugin):
                 # only if we were given the classes for consideration in
                 # the same order across all nodes).
                 node = self.hash_ring.get_node(str(cls))
-                return node == self.node_id
+                if node != self.node_id:
+                    return False
 
         return None
 
