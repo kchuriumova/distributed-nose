@@ -109,6 +109,7 @@ class DistributedNose(Plugin):
             ),
         )
 
+
     def configure(self, options, config):
         self.node_count = options.distributed_nodes
         self.node_id = options.distributed_node_number
@@ -264,6 +265,7 @@ class DistributedNose(Plugin):
         return None
 
     def wantMethod(self, method):
+        print("here")
         if self.hash_by_class:
             # Don't override class selection decisions.
             return None
