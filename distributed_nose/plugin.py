@@ -153,15 +153,14 @@ class DistributedNose(Plugin):
                     self.hash_by_class = False
 
                     test_suite = namedtuple("test_suite", "name duration")
-                    lst = []
+                    sorted_lpt_data = []
 
                     for c, info in self.lpt_data.items():
                         for test in info['tests']:
                             t = test_suite("{}.{}".format(c, test['name']), test['duration'])
-                            lst.append(t)
+                            sorted_lpt_data.append(t)
 
-                    sorted_lpt_data = sorted(
-                        lst,
+                    sorted_lpt_data.sort(
                         key=lambda t: t.duration,
                         reverse=True
                     )
