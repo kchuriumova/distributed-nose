@@ -1,4 +1,5 @@
 
+from collections import namedtuple
 import json
 import logging
 
@@ -140,7 +141,7 @@ class DistributedNose(Plugin):
                 self.lpt_nodes = [
                     {
                         'processing_time': 0,
-                        'classes': set()
+                        'tests': set()
                     }
                     for _ in range(self.node_count + 1)
                 ]
@@ -149,21 +150,29 @@ class DistributedNose(Plugin):
                     self.lpt_data = json.load(f)
 
                     # for now, lpt only operates at the class level
-                    self.hash_by_class = True
+                    self.hash_by_class = False
+
+                    test_suite = namedtuple("test_suite", "name duration")
+                    lst = []
+
+                    for c, info in self.lpt_data.items():
+                        for test in info['tests']:
+                            t = test_suite("{}.{}".format(c, test['name']), test['duration'])
+                            lst.append(t)
 
                     sorted_lpt_data = sorted(
-                        self.lpt_data.items(),
-                        key=lambda t: t[1]['duration'],
+                        lst,
+                        key=lambda t: t.duration,
                         reverse=True
                     )
 
-                    for c, data in sorted_lpt_data:
+                    for t in sorted_lpt_data:
                         node = min(
                             self.lpt_nodes[1:],
                             key=lambda n: n['processing_time']
                         )
-                        node['processing_time'] += data['duration']
-                        node['classes'].add(c)
+                        node['processing_time'] += t.duration
+                        node['tests'].add(t.name)
 
             except IOError:
                 logger.critical(
@@ -259,7 +268,9 @@ class DistributedNose(Plugin):
         if self.hash_by_class:
             # Don't override class selection decisions.
             return None
-
+        if self.algorithm == self.ALGORITHM_LEAST_PROCESSING_TIME:
+            return method
+    
         return self.validateName(method)
 
     def wantFunction(self, function):
