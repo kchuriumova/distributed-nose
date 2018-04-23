@@ -1,4 +1,3 @@
-
 import json
 import logging
 
@@ -30,6 +29,8 @@ class DistributedNose(Plugin):
         self.node_count = None
         self.node_id = None
         self.hash_ring = None
+        self.lpt_nodes = None
+        self.lpt_data = None
 
     def options(self, parser, env):
         parser.add_option(
@@ -137,19 +138,17 @@ class DistributedNose(Plugin):
                 # are 1-indexed and this prevents the need to do
                 # offsetting when we access this structure with
                 # a node-number elsewhere.
-                self.lpt_nodes = [
-                    {
-                        'processing_time': 0,
-                        'classes': set()
-                    }
-                    for _ in range(self.node_count + 1)
-                ]
 
                 with open(self.lpt_data_filepath) as f:
-                    self.lpt_data = json.load(f)
 
-                    # for now, lpt only operates at the class level
-                    self.hash_by_class = True
+                    self.lpt_data = json.load(f)
+                    self.lpt_nodes = [
+                        {
+                            'processing_time': 0,
+                            'objects': set()
+                        }
+                        for _ in range(self.node_count + 1)
+                    ]
 
                     sorted_lpt_data = sorted(
                         self.lpt_data.items(),
@@ -157,13 +156,13 @@ class DistributedNose(Plugin):
                         reverse=True
                     )
 
-                    for c, data in sorted_lpt_data:
+                    for obj, data in sorted_lpt_data:
                         node = min(
                             self.lpt_nodes[1:],
                             key=lambda n: n['processing_time']
                         )
                         node['processing_time'] += data['duration']
-                        node['classes'].add(c)
+                        node['objects'].add(obj)
 
             except IOError:
                 logger.critical(
@@ -234,13 +233,13 @@ class DistributedNose(Plugin):
             node = self.hash_ring.get_node(str(cls))
             if node != self.node_id:
                 return False
-        elif self.algorithm == self.ALGORITHM_LEAST_PROCESSING_TIME:
+        elif self.algorithm == self.ALGORITHM_LEAST_PROCESSING_TIME and self.hash_by_class:
             namespaced_class = '{}.{}'.format(
                 cls.__module__,
                 cls.__name__
             )
             if namespaced_class in self.lpt_data:
-                return namespaced_class in self.lpt_nodes[self.node_id]['classes']
+                return namespaced_class in self.lpt_nodes[self.node_id]['objects']
             else:
                 # When we don't have duration data for this class,
                 # use the hash ring to get a node. This seems safer
@@ -257,9 +256,15 @@ class DistributedNose(Plugin):
 
     def wantMethod(self, method):
         if self.hash_by_class:
-            # Don't override class selection decisions.
             return None
-
+        if self.algorithm == self.ALGORITHM_LEAST_PROCESSING_TIME and not self.hash_by_class:
+            full_name = "{}.{}.{}".format(method.__module__, method.im_class.__name__, method.__name__)
+            if full_name in self.lpt_data:
+                return full_name in self.lpt_nodes[self.node_id]['objects']
+            else:
+                node = self.hash_ring.get_node(full_name)
+                if node != self.node_id:
+                    return False
         return self.validateName(method)
 
     def wantFunction(self, function):

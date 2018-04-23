@@ -102,7 +102,8 @@ class TestOptionValidation(unittest.TestCase):
         self.plugin.options(self.parser, env=env)
         args = [
             '--algorithm=least-processing-time',
-            '--lpt-data={}'.format(LPT_DATA_FILEPATH)
+            '--lpt-data={}'.format(LPT_DATA_FILEPATH),
+            '--hash-by-class'
         ]
         options, _ = self.parser.parse_args(args)
         self.plugin.configure(options, Config())
@@ -167,14 +168,15 @@ class TestOptionValidation(unittest.TestCase):
         LPT_DATA_FILEPATH = os.path.join(
             os.path.dirname(__file__),
             'lpt_data',
-            'lpt_invalid_data.json'
+            'lpt_invalid_data.json',
         )
         env = {'NOSE_NODES': 6,
                'NOSE_NODE_NUMBER': 4}
         self.plugin.options(self.parser, env=env)
         args = [
             '--algorithm=least-processing-time',
-            '--lpt-data={}'.format(LPT_DATA_FILEPATH)
+            '--lpt-data={}'.format(LPT_DATA_FILEPATH),
+            '--hash-by-class'
         ]
         options, _ = self.parser.parse_args(args)
 

@@ -75,7 +75,8 @@ class TestClassDistribution(PluginTester, TestDistributionBase):
     activate = '--nodes=3'
     args = [
         '--node-number=1',
-        '-v'  # get test names into output
+        '-v',
+        # get test names into output
     ]
 
 
@@ -88,7 +89,7 @@ class TestClassDistributionOff(TestClassDistribution):
     def test_tc3_hashes_apart(self):
         testnames = self._tests_run()
         from_tc3 = [name for name in testnames if '.TC3)' in name]
-        self.assertTrue(0 < len(from_tc3) < 4)
+        self.assertTrue(0 < len(from_tc3) < 5)
 
     def test_func1_excluded(self):
         self.assertTrue('tests.dummy_tests.test_func1' not in self._tests_run())
@@ -108,7 +109,7 @@ class TestClassDistributionOn(TestClassDistribution):
     def test_tc3_is_included(self):
         testnames = self._tests_run()
         from_tc3 = [name for name in testnames if '.TC3)' in name]
-        self.assertTrue(len(from_tc3) == 4)
+        self.assertTrue(len(from_tc3) == 5)
 
     # Function selection should not have changed.
     def test_func1_excluded(self):
@@ -141,7 +142,8 @@ class TestLptDistribution(PluginTester, TestDistributionBase):
 class TestLptDistributionAllNodeOne(TestLptDistribution):
     args = TestLptDistribution.args + [
         '--node-number=1',
-        '--lpt-data={}'.format(TestLptDistribution.lpt_all_filepath)
+        '--lpt-data={}'.format(TestLptDistribution.lpt_all_filepath),
+        '--hash-by-class'
     ]
 
     def test_only_largest_included(self):
@@ -176,7 +178,8 @@ class TestLptDistributionAllNodeOne(TestLptDistribution):
 class TestLptDistributionAllNodeThree(TestLptDistribution):
     args = TestLptDistribution.args + [
         '--node-number=3',
-        '--lpt-data={}'.format(TestLptDistribution.lpt_all_filepath)
+        '--lpt-data={}'.format(TestLptDistribution.lpt_all_filepath),
+        '--hash-by-class'
     ]
 
     def test_all_smallest_included(self):
@@ -210,7 +213,8 @@ class TestLptDistributionPartial(TestLptDistribution):
 
     args = TestLptDistribution.args + [
         '--node-number=1',
-        '--lpt-data={}'.format(TestLptDistribution.lpt_partial_filepath)
+        '--lpt-data={}'.format(TestLptDistribution.lpt_partial_filepath),
+        '--hash-by-class'
     ]
 
     def test_tc3_is_included(self):
@@ -223,4 +227,4 @@ class TestLptDistributionPartial(TestLptDistribution):
 
         testnames = self._tests_run()
         from_tc3 = [name for name in testnames if '.TC3)' in name]
-        self.assertTrue(len(from_tc3) == 4)
+        self.assertTrue(len(from_tc3) == 5)

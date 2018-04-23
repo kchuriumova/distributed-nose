@@ -40,6 +40,10 @@ class TC3(unittest.TestCase):
     def test_TC3_4(self):
         assert True
 
+    def test_TC3_5(self):
+        # Not in data
+        assert True
+
 class TC4(unittest.TestCase):
     def test_TC4_1(self):
         assert True
@@ -77,6 +81,10 @@ class TC6(unittest.TestCase):
         assert True
 
     def test_TC6_4(self):
+        assert True
+
+    def test_TC6_5(self):
+        # Not in data
         assert True
 
 def test_func1():
